@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../screens/main_navigation_screen.dart';
 import 'registrarse.dart';
 import '../services/auth_service.dart';
@@ -120,11 +121,15 @@ class _InicioSesionState extends State<InicioSesion> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const Registrarse()),
-                      );
+                    onPressed: () async {
+                      const url = 'https://capex-front.onrender.com/olvide-contrasena';
+                      try {
+                        await launchUrl(Uri.parse(url));
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('No se pudo abrir el enlace')),
+                        );
+                      }
                     },
                     style: TextButton.styleFrom(
                       foregroundColor: const Color.fromARGB(255, 0, 0, 0),

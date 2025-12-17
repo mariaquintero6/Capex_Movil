@@ -13,7 +13,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _countryController = TextEditingController();
+  String? _selectedDocType;
+  Usuario? _currentUser;
 
   @override
   void initState() {
@@ -24,11 +25,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _loadUser() async {
     final user = await AuthService.getCurrentUser();
     if (user != null) {
+      final docTypeMap = {
+        'CC': 'Cedula de ciudadania',
+        'TI': 'Tarjeta de identidad',
+        'PP': 'Pasaporte',
+        'CE': 'Cedula de extranjeria',
+        'TE': 'Tarjeta de extranjeria',
+        'PEP': 'Permiso especial de permanencia',
+        'DIE': 'Documento de identificación extranjero',
+        'FOREIGN_NIT': 'NIT de otro país',
+        'RC': 'Registro civil',
+      };
       setState(() {
+        _currentUser = user;
         _nameController.text = user.nombre ?? '';
         _emailController.text = user.correo ?? '';
         _phoneController.text = user.telefono ?? '';
-        _countryController.text = user.tipoDocumento ?? '';
+        _selectedDocType = docTypeMap[user.tipoDocumento] ?? user.tipoDocumento;
       });
     }
   }
@@ -38,7 +51,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _countryController.dispose();
     super.dispose();
   }
 
@@ -125,7 +137,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const Divider(height: 24),
                   _buildEditableField('Teléfono', _phoneController),
                   const Divider(height: 24),
-                  _buildEditableField('Tipo de documento', _countryController),
+                  _buildDocTypeDropdown(),
                 ],
               ),
             ),
@@ -135,9 +147,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: () {
-                  // Lógica para guardar cambios
-                  Navigator.of(context).pop();
+                onPressed: () async {
+                  if (_currentUser?.idUsuario != null) {
+                    final reverseDocTypeMap = {
+                      'Cedula de ciudadania': 'CC',
+                      'Tarjeta de identidad': 'TI',
+                      'Pasaporte': 'PP',
+                      'Cedula de extranjeria': 'CE',
+                      'Tarjeta de extranjeria': 'TE',
+                      'Permiso especial de permanencia': 'PEP',
+                      'Documento de identificación extranjero': 'DIE',
+                      'NIT de otro país': 'FOREIGN_NIT',
+                      'Registro civil': 'RC',
+                    };
+                    final userData = {
+                      'nombre': _nameController.text,
+                      'correo': _emailController.text,
+                      'telefono': _phoneController.text,
+                      'tipo_documento': reverseDocTypeMap[_selectedDocType] ?? _selectedDocType,
+                    };
+                    final result = await AuthService.updateUser(_currentUser!.idUsuario!, userData);
+                    if (result['success']) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Perfil actualizado exitosamente')),
+                      );
+                      Navigator.of(context).pop();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(result['message'] ?? 'Error al actualizar perfil')),
+                      );
+                    }
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF9B000),
@@ -171,6 +211,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           labelText: label,
           border: const OutlineInputBorder(),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDocTypeDropdown() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: DropdownButtonFormField<String>(
+        value: _selectedDocType,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Tipo de documento',
+          border: OutlineInputBorder(),
+        ),
+        items: const [
+          DropdownMenuItem(value: 'Registro civil', child: Text('Registro civil')),
+          DropdownMenuItem(value: 'Tarjeta de identidad', child: Text('Tarjeta de identidad')),
+          DropdownMenuItem(value: 'Cedula de ciudadania', child: Text('Cedula de ciudadania')),
+          DropdownMenuItem(value: 'Tarjeta de extranjeria', child: Text('Tarjeta de extranjeria')),
+          DropdownMenuItem(value: 'Cedula de extranjeria', child: Text('Cedula de extranjeria')),
+          DropdownMenuItem(value: 'Pasaporte', child: Text('Pasaporte')),
+          DropdownMenuItem(value: 'Permiso especial de permanencia', child: Text('Permiso especial de permanencia')),
+          DropdownMenuItem(value: 'Documento de identificación extranjero', child: Text('Documento de identificación extranjero')),
+          DropdownMenuItem(value: 'NIT de otro país', child: Text('NIT de otro país')),
+        ],
+        onChanged: (value) {
+          setState(() {
+            _selectedDocType = value;
+          });
+        },
       ),
     );
   }

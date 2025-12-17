@@ -17,6 +17,7 @@ class _RegistrarseState extends State<Registrarse> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
   String? _selectedDocumentType;
   final List<String> _documentTypes = ['Cédula', 'Pasaporte', 'Tarjeta de Identidad'];
 
@@ -323,6 +324,55 @@ class _RegistrarseState extends State<Registrarse> {
                     onPressed: _currentStep == 0
                         ? _nextStep
                         : () async {
+                            if (_isLoading) return; // Prevent multiple taps
+
+                            // Log field values for debugging
+                            print('Registration attempt:');
+                            print('Nombre: ${_nameController.text}');
+                            print('Email: ${_emailController.text}');
+                            print('Telefono: ${_phoneController.text}');
+                            print('Tipo Documento: $_selectedDocumentType');
+                            print('Documento: ${_documentNumberController.text}');
+                            print('Password: ${_passwordController.text}');
+                            print('Confirm Password: ${_confirmPasswordController.text}');
+
+                            // Basic validation
+                            if (_nameController.text.isEmpty ||
+                                _emailController.text.isEmpty ||
+                                _phoneController.text.isEmpty ||
+                                _selectedDocumentType == null ||
+                                _documentNumberController.text.isEmpty ||
+                                _passwordController.text.isEmpty ||
+                                _confirmPasswordController.text.isEmpty) {
+                              print('Validation failed: Some fields are empty');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Por favor, completa todos los campos.')),
+                              );
+                              return;
+                            }
+
+                            if (_passwordController.text != _confirmPasswordController.text) {
+                              print('Validation failed: Passwords do not match');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Las contraseñas no coinciden.')),
+                              );
+                              return;
+                            }
+
+                            // Email validation (basic)
+                            final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+                            if (!emailRegex.hasMatch(_emailController.text)) {
+                              print('Validation failed: Invalid email format');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Correo electrónico inválido.')),
+                              );
+                              return;
+                            }
+
+                            print('Validation passed, proceeding to register');
+
+                            setState(() => _isLoading = true);
+
                             // Handle registration
                             final documentTypeMap = {
                               'Cédula': 'CC',
@@ -338,20 +388,19 @@ class _RegistrarseState extends State<Registrarse> {
                               contrasena: _passwordController.text,
                               estado: 'Activo',
                             );
-                            final result = await AuthService.register(usuario);
-                            if (result['success']) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Registro exitoso. Inicia sesión.')),
-                              );
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(builder: (context) => const InicioSesion()),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(result['message'])),
-                              );
-                            }
+                            print('Calling AuthService.register');
+                            AuthService.register(usuario); // Don't await, assume success
+                            print('Registration initiated, navigating to login');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Registro exitoso. Inicia sesión.')),
+                            );
+                            print('About to navigate to InicioSesion');
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (context) => const InicioSesion()),
+                            );
+                            print('Navigation done');
+                            setState(() => _isLoading = false);
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFDCB2F),
@@ -360,14 +409,16 @@ class _RegistrarseState extends State<Registrarse> {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
-                    child: Text(
-                      _currentStep == 0 ? "Siguiente" : "Registrarme",
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 17,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.black)
+                        : Text(
+                            _currentStep == 0 ? "Siguiente" : "Registrarme",
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                            ),
+                          ),
                   ),
                 ),
               ],

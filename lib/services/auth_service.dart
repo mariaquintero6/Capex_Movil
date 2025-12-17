@@ -33,22 +33,58 @@ class AuthService {
   }
 
   static Future<Map<String, dynamic>> register(Usuario usuario) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(usuario.toJson()),
+    print('AuthService.register: sending request');
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/register/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(usuario.toJson()),
+      ).timeout(const Duration(seconds: 120));
+      print('AuthService.register: response status ${response.statusCode}');
+
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        print('AuthService.register: response body $data');
+        if (data['usuario'] != null) {
+          return {'success': true, 'user': Usuario.fromJson(data['usuario'])};
+        } else {
+          return {'success': false, 'message': 'Error al registrar usuario'};
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        print('AuthService.register: error $errorData');
+        return {'success': false, 'message': errorData['message'] ?? 'Error de registro'};
+      }
+    } catch (e) {
+      print('AuthService.register: exception $e');
+      return {'success': false, 'message': 'Error de conexión: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateUser(int id, Map<String, dynamic> userData) async {
+    final token = await getToken();
+    final response = await http.put(
+      Uri.parse('$baseUrl/usuarios/$id/profile'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(userData),
     );
 
-    if (response.statusCode == 201) {
+    if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       if (data['usuario'] != null) {
+        // Update stored user data
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user', jsonEncode(data['usuario']));
         return {'success': true, 'user': Usuario.fromJson(data['usuario'])};
       } else {
-        return {'success': false, 'message': 'Error al registrar usuario'};
+        return {'success': false, 'message': 'Error al actualizar usuario'};
       }
     } else {
       final errorData = jsonDecode(response.body);
-      return {'success': false, 'message': errorData['message'] ?? 'Error de registro'};
+      return {'success': false, 'message': errorData['message'] ?? 'Error al actualizar usuario'};
     }
   }
 

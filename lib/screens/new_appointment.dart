@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/appointment_service.dart';
+import '../services/auth_service.dart';
 import '../models/cita.dart';
 import '../models/servicio.dart';
 import '../models/detalle_cita.dart';
+import '../models/usuario.dart';
 
 class NewAppointmentScreen extends StatefulWidget {
   const NewAppointmentScreen({super.key});
@@ -30,6 +32,7 @@ class _NewAppointmentScreenState extends State<NewAppointmentScreen> {
   int? _selectedClientId;
   int? _selectedEmployeeId;
   TimeOfDay? _selectedTime;
+  Usuario? _currentUser;
 
   double get _total => _selectedServices.fold(0.0, (sum, item) {
     final servicio = item['servicio'] as Servicio;
@@ -48,7 +51,25 @@ class _NewAppointmentScreenState extends State<NewAppointmentScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadUser().then((_) => _loadData());
+  }
+
+  Future<void> _loadUser() async {
+    final user = await AuthService.getCurrentUser();
+    if (mounted) {
+      setState(() {
+        _currentUser = user;
+      });
+      // Pre-fill client data if user is a client
+      if (_currentUser?.roleId == 3) {
+        _selectedClientId = _currentUser!.idUsuario;
+        _nameController.text = _currentUser!.nombre ?? '';
+        _documentController.text = _currentUser!.documento ?? '';
+        _phoneController.text = _currentUser!.telefono ?? '';
+        _emailController.text = _currentUser!.correo ?? '';
+        _selectedDocType = _currentUser!.tipoDocumento;
+      }
+    }
   }
 
   Future<void> _loadData() async {
@@ -56,26 +77,20 @@ class _NewAppointmentScreenState extends State<NewAppointmentScreen> {
     try {
       final servicios = await AppointmentService.getServices();
       final empleados = await AppointmentService.getEmpleados();
-      final clientes = await AppointmentService.getClientes();
-      
+      List<Map<String, dynamic>> clientes = [];
+      if (_currentUser?.roleId != 3) {
+        clientes = await AppointmentService.getClientes();
+      }
+
       print('📊 === DATOS CARGADOS ===');
       print('Servicios: ${servicios.length}');
-      if (servicios.isNotEmpty) {
-        final s = servicios.first;
-        print('Primer servicio: id=${s.idServicio} (${s.idServicio.runtimeType}), nombre=${s.nombre}, precio=${s.precio} (${s.precio.runtimeType}), duracion=${s.duracion} (${s.duracion.runtimeType})');
-      }
       print('Empleados: ${empleados.length}');
       if (empleados.isNotEmpty) {
-        final e = empleados.first;
-        print('Primer empleado: id=${e['id']} (${e['id']?.runtimeType}), nombre=${e['nombre']} (${e['nombre']?.runtimeType})');
+        print('Primer empleado: ${empleados.first}');
       }
       print('Clientes: ${clientes.length}');
-      if (clientes.isNotEmpty) {
-        final c = clientes.first;
-        print('Primer cliente: id=${c['id']} (${c['id']?.runtimeType}), nombre=${c['nombre']} (${c['nombre']?.runtimeType}), documento=${c['documento']} (${c['documento']?.runtimeType})');
-      }
       print('========================');
-      
+
       setState(() {
         _servicios = servicios;
         _empleados = empleados;

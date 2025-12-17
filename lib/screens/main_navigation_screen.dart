@@ -3,6 +3,8 @@ import 'appointments_screen.dart';
 import 'appointments_list.dart';
 import 'profile_screen.dart';
 import 'services.dart';
+import '../services/auth_service.dart';
+import '../models/usuario.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -14,6 +16,22 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
+  Usuario? _currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    final user = await AuthService.getCurrentUser();
+    if (mounted) {
+      setState(() {
+        _currentUser = user;
+      });
+    }
+  }
 
   // Función para obtener la pantalla correcta según el índice
   Widget _getScreenForIndex(int index) {
@@ -112,10 +130,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             ),
           ),
         ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Hair Salon',
               style: TextStyle(
                 color: Colors.black87,
@@ -124,8 +142,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               ),
             ),
             Text(
-              'Admin',
-              style: TextStyle(
+              _currentUser?.roleId == 3 ? 'Cliente' : 'Admin',
+              style: const TextStyle(
                 color: Colors.grey,
                 fontSize: 12,
               ),

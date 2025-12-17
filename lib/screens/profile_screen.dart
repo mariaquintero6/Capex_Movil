@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../layouts/inicio_sesion.dart';
 import 'edit_profile.dart';
 import '../services/auth_service.dart';
@@ -140,7 +141,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 16),
             // Botones de acción
-            _buildActionButton('Configuración', () {}),
+            _buildActionButton('Visitar Sitio Web', () async {
+              const url = 'https://capex-front.onrender.com/';
+              try {
+                await launchUrl(Uri.parse(url));
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No se pudo abrir el enlace')),
+                );
+              }
+            }),
             const SizedBox(height: 12),
             _buildActionButton('Cerrar Sesión', () async {
               await AuthService.logout();

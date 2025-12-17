@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'new_appointment.dart';
 import 'edit_appointment.dart';
+import 'appointment_details.dart';
 import '../services/appointment_service.dart';
+import '../services/auth_service.dart';
 import '../models/cita.dart';
+import '../models/usuario.dart';
 
 class AppointmentsListScreen extends StatefulWidget {
   const AppointmentsListScreen({super.key});
@@ -16,21 +19,32 @@ class _AppointmentsListScreenState extends State<AppointmentsListScreen>
   late TabController _tabController;
   List<Cita> _allAppointments = [];
   bool _isLoading = true;
+  Usuario? _currentUser;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this, initialIndex: 1);
     _tabController.addListener(_onTabChanged);
-    _loadAppointments();
+    _loadUser().then((_) => _loadAppointments());
   }
 
   Future<void> _loadAppointments() async {
     try {
       final appointments = await AppointmentService.getAppointments();
+      print('Current user id: ${_currentUser?.idUsuario}, role: ${_currentUser?.roleId}');
+      for (var cita in appointments) {
+        print('Cita idCliente: ${cita.idCliente}');
+      }
+      List<Cita> filteredAppointments = appointments;
+      if (_currentUser?.roleId == 3) { // Client role
+        filteredAppointments = appointments.where((cita) => cita.idCliente == _currentUser!.idUsuario).toList();
+        print('Filtered to ${filteredAppointments.length} appointments for client');
+      }
+      filteredAppointments.sort((a, b) => (b.fechaServicio ?? DateTime.now()).compareTo(a.fechaServicio ?? DateTime.now()));
       if (mounted) {
         setState(() {
-          _allAppointments = appointments;
+          _allAppointments = filteredAppointments;
           _isLoading = false;
         });
       }
@@ -43,6 +57,15 @@ class _AppointmentsListScreenState extends State<AppointmentsListScreen>
           SnackBar(content: Text('Error al cargar citas: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _loadUser() async {
+    final user = await AuthService.getCurrentUser();
+    if (mounted) {
+      setState(() {
+        _currentUser = user;
+      });
     }
   }
 
@@ -63,10 +86,10 @@ class _AppointmentsListScreenState extends State<AppointmentsListScreen>
           final citaDate = DateTime(cita.fechaServicio!.year, cita.fechaServicio!.month, cita.fechaServicio!.day);
           return citaDate.isAtSameMomentAs(today);
         }).toList();
-      case 2: // Pendientes
-        return _allAppointments.where((cita) => cita.estado == 'pendiente').toList();
+      case 2: // Agendadas
+        return _allAppointments.where((cita) => cita.estado?.toLowerCase() == 'agendada').toList();
       case 3: // Confirmadas
-        return _allAppointments.where((cita) => cita.estado == 'confirmada').toList();
+        return _allAppointments.where((cita) => cita.estado?.toLowerCase() == 'confirmada').toList();
       default:
         return _allAppointments;
     }
@@ -155,7 +178,7 @@ class _AppointmentsListScreenState extends State<AppointmentsListScreen>
               tabs: const [
                 Tab(text: 'Todas'),
                 Tab(text: 'Hoy'),
-                Tab(text: 'Pendientes'),
+                Tab(text: 'Agendadas'),
                 Tab(text: 'Confirmadas'),
               ],
             ),
@@ -187,126 +210,135 @@ class _AppointmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initials = data.usuario?.nombre?.split(' ').map((e) => e[0]).take(2).join().toUpperCase() ?? 'U';
-    final isPending = data.estado == 'pendiente';
+    final isPending = data.estado?.toLowerCase() == 'agendada' || data.estado?.toLowerCase() == 'pendiente';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => AppointmentDetailsScreen(cita: data),
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9B000),
-              shape: BoxShape.circle,
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            child: Center(
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9B000),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  initials,
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    data.servicios?.isNotEmpty == true ? data.servicios!.map((d) => d.servicio?.nombre ?? 'Servicio').join(', ') : (data.servicio?.nombre ?? 'Servicio'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    data.usuario?.nombre ?? 'Cliente',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${data.fechaServicio?.toLocal().toString().split(' ')[0] ?? 'Fecha'} ${data.horaEntrada ?? 'Hora'}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Color(0xFFF9B000)),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => EditAppointmentScreen(cita: data),
+                          ),
+                        );
+                      },
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isPending
+                            ? const Color(0xFFFFF1D1)
+                            : const Color(0xFFF9B000),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        data.estado ?? 'Estado',
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 Text(
-                  data.servicios?.isNotEmpty == true ? data.servicios!.map((d) => d.servicio?.nombre ?? 'Servicio').join(', ') : (data.servicio?.nombre ?? 'Servicio'),
+                  '\$${data.valorTotal?.toStringAsFixed(0) ?? '0'}',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  data.usuario?.nombre ?? 'Cliente',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${data.fechaServicio?.toLocal().toString().split(' ')[0] ?? 'Fecha'} ${data.horaEntrada ?? 'Hora'}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: Color(0xFFF9B000)),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => EditAppointmentScreen(cita: data),
-                        ),
-                      );
-                    },
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isPending
-                          ? const Color(0xFFFFF1D1)
-                          : const Color(0xFFF9B000),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      data.estado ?? 'Estado',
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '\$${data.valorTotal?.toStringAsFixed(0) ?? '0'}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

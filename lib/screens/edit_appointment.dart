@@ -18,6 +18,7 @@ class _EditAppointmentScreenState extends State<EditAppointmentScreen> {
   String? _selectedService;
   String? _selectedProfessional;
   String? _selectedDocType;
+  String? _selectedStatus;
   final TextEditingController _dateController = TextEditingController();
   final TextEditingController _timeController = TextEditingController();
   final TextEditingController _durationController = TextEditingController();
@@ -101,6 +102,7 @@ class _EditAppointmentScreenState extends State<EditAppointmentScreen> {
     _nameController.text = widget.cita.usuario?.nombre ?? '';
     _phoneController.text = widget.cita.usuario?.telefono ?? '';
     _emailController.text = widget.cita.usuario?.correo ?? '';
+    _selectedStatus = widget.cita.estado;
 
     if (widget.cita.servicios?.isNotEmpty == true) {
       _selectedEmployeeId = widget.cita.servicios!.first.idEmpleado;
@@ -376,6 +378,18 @@ class _EditAppointmentScreenState extends State<EditAppointmentScreen> {
                 keyboardType: TextInputType.emailAddress,
               ),
             ),
+            const SizedBox(height: 16),
+            _LabeledField(
+              label: 'Estado',
+              child: _StatusDropdown(
+                value: _selectedStatus,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedStatus = value;
+                  });
+                },
+              ),
+            ),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
@@ -422,9 +436,9 @@ class _EditAppointmentScreenState extends State<EditAppointmentScreen> {
                     final citaData = {
                       'id_cliente': widget.cita.idCliente,
                       'fecha_servicio': fechaFormateada,
-                      'hora_entrada': horaEntrada,
-                      'hora_salida': horaSalida,
-                      'estado': widget.cita.estado ?? 'Agendada',
+                      'hora_inicio': horaEntrada,
+                      'hora_finalizacion': horaSalida,
+                      'estado': _selectedStatus ?? 'Agendada',
                       'valor_total': widget.cita.valorTotal ?? 0.0,
                       'motivo': 'Cita actualizada desde app móvil',
                     };
@@ -627,6 +641,57 @@ class _DropdownField extends StatelessWidget {
               hint: Text(
                 hintText,
                 style: TextStyle(color: Colors.grey[600]),
+              ),
+              isExpanded: true,
+              underline: const SizedBox(),
+              items: items.map((String item) {
+                return DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(item),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+          const Icon(
+            Icons.keyboard_arrow_down,
+            color: Colors.grey,
+            size: 20,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusDropdown extends StatelessWidget {
+  const _StatusDropdown({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = ['Agendada', 'Confirmada', 'Reprogramada', 'En proceso', 'Finalizada', 'Pagada', 'Cancelada por el usuario', 'No asistio'];
+
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButton<String>(
+              value: value,
+              hint: const Text(
+                'Seleccionar Estado',
+                style: TextStyle(color: Colors.grey),
               ),
               isExpanded: true,
               underline: const SizedBox(),

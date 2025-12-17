@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'new_appointment.dart';
 import 'edit_appointment.dart';
+import 'appointment_details.dart';
 import '../services/appointment_service.dart';
+import '../services/auth_service.dart';
 import '../models/cita.dart';
+import '../models/usuario.dart';
 
 class AppointmentsScreen extends StatefulWidget {
   const AppointmentsScreen({super.key});
@@ -14,19 +17,39 @@ class AppointmentsScreen extends StatefulWidget {
 class _AppointmentsScreenState extends State<AppointmentsScreen> {
   List<Cita> _appointments = [];
   bool _isLoading = true;
+  Usuario? _currentUser;
 
   @override
   void initState() {
     super.initState();
-    _loadAppointments();
+    _loadUser().then((_) => _loadAppointments());
+  }
+
+  Future<void> _loadUser() async {
+    final user = await AuthService.getCurrentUser();
+    if (mounted) {
+      setState(() {
+        _currentUser = user;
+      });
+    }
   }
 
   Future<void> _loadAppointments() async {
     try {
       final appointments = await AppointmentService.getAppointments();
+      List<Cita> filteredAppointments = appointments;
+      if (_currentUser?.roleId == 3) { // Client role
+        filteredAppointments = appointments.where((cita) => cita.idCliente == _currentUser!.idUsuario).toList();
+      }
+      // Filter out finalized appointments
+      filteredAppointments = filteredAppointments.where((cita) => cita.estado?.toLowerCase() != 'finalizada').toList();
+      // Sort by date ascending (next ones first)
+      filteredAppointments.sort((a, b) => (a.fechaServicio ?? DateTime.now()).compareTo(b.fechaServicio ?? DateTime.now()));
+      // Take only first 3
+      filteredAppointments = filteredAppointments.take(3).toList();
       if (mounted) {
         setState(() {
-          _appointments = appointments;
+          _appointments = filteredAppointments;
           _isLoading = false;
         });
       }
@@ -85,7 +108,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Citas de Hoy',
+                    'Próximas Citas',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: Colors.black87,
@@ -239,107 +262,120 @@ class _AppointmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFEFEFEF)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F000000),
-            blurRadius: 12,
-            offset: Offset(0, 8),
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => AppointmentDetailsScreen(cita: data),
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF4D9),
-              borderRadius: BorderRadius.circular(16),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFEFEFEF)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0F000000),
+              blurRadius: 12,
+              offset: Offset(0, 8),
             ),
-            child: const Icon(
-              Icons.calendar_month,
-              color: Color(0xFFF7B500),
-              size: 28,
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4D9),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.calendar_month,
+                color: Color(0xFFF7B500),
+                size: 28,
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  data.servicios?.isNotEmpty == true ? data.servicios!.map((d) => d.servicio?.nombre ?? 'Servicio').join(', ') : (data.servicio?.nombre ?? 'Servicio'),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(Icons.access_time, size: 18, color: Colors.grey[500]),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${data.fechaServicio?.toLocal().toString().split(' ')[0] ?? 'Fecha'} ${data.horaEntrada ?? 'Hora'}',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 15,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    data.servicios?.isNotEmpty == true ? data.servicios!.map((d) => d.servicio?.nombre ?? 'Servicio').join(', ') : (data.servicio?.nombre ?? 'Servicio'),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  data.usuario?.nombre ?? 'Cliente',
-                  style: const TextStyle(
-                    color: Color(0xFF8C8C8C),
-                    fontSize: 16,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, size: 18, color: Colors.grey[500]),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${data.fechaServicio?.toLocal().toString().split(' ')[0] ?? 'Fecha'} ${data.horaEntrada ?? 'Hora'}',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 15,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    data.usuario?.nombre ?? 'Cliente',
+                    style: const TextStyle(
+                      color: Color(0xFF8C8C8C),
+                      fontSize: 16,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Color(0xFFF7B500)),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => EditAppointmentScreen(cita: data),
+                      ),
+                    );
+                  },
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: data.estado == 'confirmada' ? const Color(0xFFFFE7AF) : const Color(0xFFFFF1D1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    data.estado ?? 'pendiente',
+                    style: const TextStyle(
+                      color: Color(0xFF1E1E1E),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit, color: Color(0xFFF7B500)),
-                onPressed: () {
-                  // Navigate to edit
-                },
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: data.estado == 'confirmada' ? const Color(0xFFFFE7AF) : const Color(0xFFFFF1D1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  data.estado ?? 'pendiente',
-                  style: const TextStyle(
-                    color: Color(0xFF1E1E1E),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
